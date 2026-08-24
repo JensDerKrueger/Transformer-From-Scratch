@@ -41,7 +41,7 @@ else
 	LFLAGS :=
 endif
 
-.PHONY: all release run corpus bpe bpe-fast bpe-compare tensor matmul embedding ipq ipq-benchmark clean mrproper
+.PHONY: all release run corpus bpe bpe-fast bpe-compare tensor matmul embedding position ipq ipq-benchmark clean mrproper
 
 all: $(TARGET_PATH)
 
@@ -71,6 +71,9 @@ matmul: $(TARGET_PATH)
 
 embedding: $(TARGET_PATH)
 	./$(TARGET_PATH) --embedding
+
+position: $(TARGET_PATH)
+	./$(TARGET_PATH) --position
 
 ipq: $(TARGET_PATH)
 	./$(TARGET_PATH) --ipq
