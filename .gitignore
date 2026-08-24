@@ -1,0 +1,6 @@
+build/
+.DS_Store
+AGENTS.md
+data/*
+!data/
+!data/README.md
