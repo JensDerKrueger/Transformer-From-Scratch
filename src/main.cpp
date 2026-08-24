@@ -2,6 +2,7 @@
 #include "tfs/byte_tokenizer.h"
 #include "tfs/corpus_reader.h"
 #include "tfs/indexed_priority_queue.h"
+#include "tfs/tensor.h"
 
 #include <algorithm>
 #include <array>
@@ -26,6 +27,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --bpe path/to/corpus.txt [maxLines] [mergeCount] [sampleText]\n"
               << "  " << executable << " --bpe-fast path/to/corpus.txt [maxLines] [mergeCount] [sampleText]\n"
               << "  " << executable << " --bpe-compare path/to/corpus.txt [maxLines] [mergeCount]\n"
+              << "  " << executable << " --tensor\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -138,6 +140,59 @@ void printQueueTop(
     std::cout << label << ": \""
               << queue.topKey() << "\" count "
               << queue.topPriority() << '\n';
+}
+
+template <typename Value>
+void printList(const std::vector<Value>& values) {
+    std::cout << '[';
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (i != 0) {
+            std::cout << ", ";
+        }
+        std::cout << values[i];
+    }
+    std::cout << ']';
+}
+
+void runTensorDemo() {
+    const tfs::TensorShape shape({2, 3, 4});
+    tfs::Tensor tensor(shape);
+
+    for (std::size_t i = 0; i < tensor.size(); ++i) {
+        tensor[i] = static_cast<tfs::TensorValue>(i);
+    }
+
+    const std::vector<std::size_t> index = {1, 2, 3};
+    tensor.at(index) = 42.0f;
+
+    const tfs::Tensor bias = tfs::Tensor::filled(shape, 1.0f);
+    const tfs::Tensor shifted = tfs::add(tensor, bias);
+    const tfs::Tensor scaled = tfs::multiply(shifted, 0.5f);
+
+    std::cout << "Shape: ";
+    printList(shape.getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Rank: " << shape.rank() << '\n';
+    std::cout << "Element count: " << shape.elementCount() << '\n';
+
+    std::cout << "Strides: ";
+    printList(tensor.getStrides());
+    std::cout << '\n';
+
+    std::cout << "Index: ";
+    printList(index);
+    std::cout << '\n';
+
+    std::cout << "Flat offset: " << tensor.offset(index) << '\n';
+    std::cout << "Value at index: " << tensor.at(index) << '\n';
+
+    std::cout << "First row after add and scale:";
+    std::cout << std::fixed << std::setprecision(1);
+    for (std::size_t i = 0; i < 4; ++i) {
+        std::cout << ' ' << scaled[i];
+    }
+    std::cout << '\n';
 }
 
 void runIndexedPriorityQueueDemo() {
@@ -471,6 +526,16 @@ int main(const int argc, char** argv) {
             const std::size_t mergeCount = argc >= 5 ? static_cast<std::size_t>(parseU64(argv[4])) : 128;
 
             runBpeCompareDemo(argv[2], maxLines, mergeCount);
+            return 0;
+        }
+
+        if (mode == "--tensor") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runTensorDemo();
             return 0;
         }
 

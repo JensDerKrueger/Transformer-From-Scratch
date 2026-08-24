@@ -9,6 +9,7 @@ current code covers:
 - corpus reading and byte statistics
 - a simple BPE tokenizer/trainer
 - an indexed priority queue used for faster BPE experiments
+- a small tensor foundation with shape, strides and flat storage
 
 ## Build
 
@@ -22,6 +23,7 @@ make
 make run
 make corpus
 make bpe
+make tensor
 make ipq
 make ipq-benchmark
 ```

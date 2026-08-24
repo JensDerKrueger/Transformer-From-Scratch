@@ -41,7 +41,7 @@ else
 	LFLAGS :=
 endif
 
-.PHONY: all release run corpus bpe bpe-fast bpe-compare ipq ipq-benchmark clean mrproper
+.PHONY: all release run corpus bpe bpe-fast bpe-compare tensor ipq ipq-benchmark clean mrproper
 
 all: $(TARGET_PATH)
 
@@ -62,6 +62,9 @@ bpe-fast: $(TARGET_PATH)
 
 bpe-compare: $(TARGET_PATH)
 	./$(TARGET_PATH) --bpe-compare "$(CORPUS)" $(COMPARE_LINES) $(COMPARE_MERGES)
+
+tensor: $(TARGET_PATH)
+	./$(TARGET_PATH) --tensor
 
 ipq: $(TARGET_PATH)
 	./$(TARGET_PATH) --ipq
