@@ -2,6 +2,7 @@
 #include "tfs/byte_tokenizer.h"
 #include "tfs/corpus_reader.h"
 #include "tfs/indexed_priority_queue.h"
+#include "tfs/linear_layer.h"
 #include "tfs/position_embedding.h"
 #include "tfs/tensor.h"
 #include "tfs/tensor_operations.h"
@@ -34,6 +35,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --matmul\n"
               << "  " << executable << " --embedding\n"
               << "  " << executable << " --position\n"
+              << "  " << executable << " --linear\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -348,6 +350,71 @@ void runPositionEmbeddingDemo() {
 
     std::cout << "Same token id 1 appears at positions 1 and 3\n";
     std::cout << "After adding positions, these rows are no longer identical\n";
+}
+
+void runLinearLayerDemo() {
+    const tfs::TokenEmbedding tokenEmbedding(
+        6,
+        3,
+        {
+            0.00f, 0.01f, 0.02f,
+            0.10f, 0.11f, 0.12f,
+            0.20f, 0.21f, 0.22f,
+            0.30f, 0.31f, 0.32f,
+            0.40f, 0.41f, 0.42f,
+            0.50f, 0.51f, 0.52f
+        }
+    );
+    const tfs::PositionEmbedding positionEmbedding(
+        4,
+        3,
+        {
+            0.00f, 1.00f, 2.00f,
+            0.01f, 1.01f, 2.01f,
+            0.02f, 1.02f, 2.02f,
+            0.03f, 1.03f, 2.03f
+        }
+    );
+    const tfs::LinearLayer projection(
+        3,
+        2,
+        {
+            0.50f, -0.25f,
+            1.00f, 0.00f,
+            -0.50f, 0.75f
+        },
+        {0.10f, -0.20f}
+    );
+    const std::vector<tfs::TokenId> tokens = {3, 1, 4, 1};
+    const tfs::Tensor tokenVectors = tokenEmbedding.embed(tokens);
+    const tfs::Tensor transformerInput = positionEmbedding.addTo(tokenVectors);
+    const tfs::Tensor projected = projection.forward(transformerInput);
+
+    std::cout << "Input shape: ";
+    printList(transformerInput.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Weight shape: ";
+    printList(projection.getWeights().getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Bias shape: ";
+    printList(projection.getBias().getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Output shape: ";
+    printList(projected.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Transformer input:\n";
+    printMatrix(transformerInput);
+    std::cout << "Projected vectors:\n";
+    printMatrix(projected);
+    std::cout << std::defaultfloat;
+
+    std::cout << "Each token row used the same weights and bias\n";
+    std::cout << "Later we will use linear layers for query, key, value and logits\n";
 }
 
 void runIndexedPriorityQueueDemo() {
@@ -721,6 +788,16 @@ int main(const int argc, char** argv) {
             }
 
             runPositionEmbeddingDemo();
+            return 0;
+        }
+
+        if (mode == "--linear") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runLinearLayerDemo();
             return 0;
         }
 
