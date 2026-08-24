@@ -3,6 +3,7 @@
 #include "tfs/corpus_reader.h"
 #include "tfs/indexed_priority_queue.h"
 #include "tfs/tensor.h"
+#include "tfs/tensor_operations.h"
 
 #include <algorithm>
 #include <array>
@@ -28,6 +29,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --bpe-fast path/to/corpus.txt [maxLines] [mergeCount] [sampleText]\n"
               << "  " << executable << " --bpe-compare path/to/corpus.txt [maxLines] [mergeCount]\n"
               << "  " << executable << " --tensor\n"
+              << "  " << executable << " --matmul\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -193,6 +195,66 @@ void runTensorDemo() {
         std::cout << ' ' << scaled[i];
     }
     std::cout << '\n';
+}
+
+void printMatrix(const tfs::Tensor& matrix) {
+    const auto& shape = matrix.getShape();
+    const auto& strides = matrix.getStrides();
+    const tfs::TensorValue* const values = matrix.data();
+
+    for (std::size_t row = 0; row < shape[0]; ++row) {
+        const std::size_t rowOffset = row * strides[0];
+        std::cout << "  ";
+
+        for (std::size_t column = 0; column < shape[1]; ++column) {
+            if (column != 0) {
+                std::cout << ' ';
+            }
+
+            std::cout << values[rowOffset + column * strides[1]];
+        }
+
+        std::cout << '\n';
+    }
+}
+
+void runMatrixMultiplyDemo() {
+    const tfs::Tensor left = tfs::Tensor::fromValues(
+        tfs::TensorShape({2, 3}),
+        {1.0f, 2.0f, 3.0f,
+         4.0f, 5.0f, 6.0f}
+    );
+    const tfs::Tensor right = tfs::Tensor::fromValues(
+        tfs::TensorShape({3, 2}),
+        {7.0f, 8.0f,
+         9.0f, 10.0f,
+         11.0f, 12.0f}
+    );
+    const tfs::Tensor result = tfs::matrixMultiply(left, right);
+
+    std::cout << "Left shape: ";
+    printList(left.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Right shape: ";
+    printList(right.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Result shape: ";
+    printList(result.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Left matrix:\n";
+    printMatrix(left);
+
+    std::cout << "Right matrix:\n";
+    printMatrix(right);
+
+    std::cout << "Result matrix:\n";
+    printMatrix(result);
+
+    std::cout << "result[1, 0] = 4*7 + 5*9 + 6*11 = "
+              << result.at({1, 0}) << '\n';
 }
 
 void runIndexedPriorityQueueDemo() {
@@ -536,6 +598,16 @@ int main(const int argc, char** argv) {
             }
 
             runTensorDemo();
+            return 0;
+        }
+
+        if (mode == "--matmul") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runMatrixMultiplyDemo();
             return 0;
         }
 

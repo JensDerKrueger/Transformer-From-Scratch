@@ -132,6 +132,14 @@ public:
         return values;
     }
 
+    TensorValue* data() {
+        return values.data();
+    }
+
+    const TensorValue* data() const {
+        return values.data();
+    }
+
     TensorValue& operator[](const std::size_t flatIndex) {
         return values.at(flatIndex);
     }
