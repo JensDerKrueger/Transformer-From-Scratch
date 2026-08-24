@@ -1,3 +1,4 @@
+#include "tfs/attention_projections.h"
 #include "tfs/bpe_tokenizer.h"
 #include "tfs/byte_tokenizer.h"
 #include "tfs/corpus_reader.h"
@@ -36,6 +37,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --embedding\n"
               << "  " << executable << " --position\n"
               << "  " << executable << " --linear\n"
+              << "  " << executable << " --qkv\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -415,6 +417,87 @@ void runLinearLayerDemo() {
 
     std::cout << "Each token row used the same weights and bias\n";
     std::cout << "Later we will use linear layers for query, key, value and logits\n";
+}
+
+void runAttentionProjectionDemo() {
+    const tfs::TokenEmbedding tokenEmbedding(
+        6,
+        3,
+        {
+            0.00f, 0.01f, 0.02f,
+            0.10f, 0.11f, 0.12f,
+            0.20f, 0.21f, 0.22f,
+            0.30f, 0.31f, 0.32f,
+            0.40f, 0.41f, 0.42f,
+            0.50f, 0.51f, 0.52f
+        }
+    );
+    const tfs::PositionEmbedding positionEmbedding(
+        4,
+        3,
+        {
+            0.00f, 1.00f, 2.00f,
+            0.01f, 1.01f, 2.01f,
+            0.02f, 1.02f, 2.02f,
+            0.03f, 1.03f, 2.03f
+        }
+    );
+    const tfs::AttentionProjections projections(
+        3,
+        2,
+        {
+            0.50f, -0.25f,
+            1.00f, 0.00f,
+            -0.50f, 0.75f
+        },
+        {0.10f, -0.20f},
+        {
+            0.25f, 0.50f,
+            -0.50f, 0.25f,
+            1.00f, -0.75f
+        },
+        {0.00f, 0.10f},
+        {
+            1.00f, 0.00f,
+            0.00f, 1.00f,
+            0.50f, 0.50f
+        },
+        {-0.10f, 0.20f}
+    );
+    const std::vector<tfs::TokenId> tokens = {3, 1, 4, 1};
+    const tfs::Tensor tokenVectors = tokenEmbedding.embed(tokens);
+    const tfs::Tensor transformerInput = positionEmbedding.addTo(tokenVectors);
+    const tfs::AttentionProjectionResult result = projections.forward(transformerInput);
+
+    std::cout << "Input shape: ";
+    printList(transformerInput.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Projection size: " << projections.projectionSize() << '\n';
+
+    std::cout << "Query shape: ";
+    printList(result.queries.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Key shape: ";
+    printList(result.keys.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Value shape: ";
+    printList(result.values.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Queries:\n";
+    printMatrix(result.queries);
+    std::cout << "Keys:\n";
+    printMatrix(result.keys);
+    std::cout << "Values:\n";
+    printMatrix(result.values);
+    std::cout << std::defaultfloat;
+
+    std::cout << "All three tensors came from the same input\n";
+    std::cout << "Each projection has its own weights and bias\n";
 }
 
 void runIndexedPriorityQueueDemo() {
@@ -798,6 +881,16 @@ int main(const int argc, char** argv) {
             }
 
             runLinearLayerDemo();
+            return 0;
+        }
+
+        if (mode == "--qkv") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runAttentionProjectionDemo();
             return 0;
         }
 
