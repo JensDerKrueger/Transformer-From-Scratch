@@ -4,6 +4,7 @@
 #include "tfs/indexed_priority_queue.h"
 #include "tfs/tensor.h"
 #include "tfs/tensor_operations.h"
+#include "tfs/token_embedding.h"
 
 #include <algorithm>
 #include <array>
@@ -30,6 +31,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --bpe-compare path/to/corpus.txt [maxLines] [mergeCount]\n"
               << "  " << executable << " --tensor\n"
               << "  " << executable << " --matmul\n"
+              << "  " << executable << " --embedding\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -255,6 +257,42 @@ void runMatrixMultiplyDemo() {
 
     std::cout << "result[1, 0] = 4*7 + 5*9 + 6*11 = "
               << result.at({1, 0}) << '\n';
+}
+
+void runEmbeddingDemo() {
+    const tfs::TokenEmbedding embedding(
+        6,
+        3,
+        {
+            0.00f, 0.01f, 0.02f,
+            0.10f, 0.11f, 0.12f,
+            0.20f, 0.21f, 0.22f,
+            0.30f, 0.31f, 0.32f,
+            0.40f, 0.41f, 0.42f,
+            0.50f, 0.51f, 0.52f
+        }
+    );
+    const std::vector<tfs::TokenId> tokens = {3, 1, 4, 1};
+    const tfs::Tensor vectors = embedding.embed(tokens);
+
+    std::cout << "Vocab size: " << embedding.vocabSize() << '\n';
+    std::cout << "Embedding size: " << embedding.embeddingSize() << '\n';
+
+    std::cout << "Token ids: ";
+    printList(tokens);
+    std::cout << '\n';
+
+    std::cout << "Embedding shape: ";
+    printList(vectors.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Selected vectors:\n";
+    printMatrix(vectors);
+    std::cout << std::defaultfloat;
+
+    std::cout << "First token vector came from weight row 3\n";
+    std::cout << "Repeated token id 1 produces the same vector twice\n";
 }
 
 void runIndexedPriorityQueueDemo() {
@@ -608,6 +646,16 @@ int main(const int argc, char** argv) {
             }
 
             runMatrixMultiplyDemo();
+            return 0;
+        }
+
+        if (mode == "--embedding") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runEmbeddingDemo();
             return 0;
         }
 
