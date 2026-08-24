@@ -24,6 +24,8 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --text \"Hallo Transformer\"\n"
               << "  " << executable << " --corpus path/to/corpus.txt [maxLines]\n"
               << "  " << executable << " --bpe path/to/corpus.txt [maxLines] [mergeCount] [sampleText]\n"
+              << "  " << executable << " --bpe-fast path/to/corpus.txt [maxLines] [mergeCount] [sampleText]\n"
+              << "  " << executable << " --bpe-compare path/to/corpus.txt [maxLines] [mergeCount]\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -306,14 +308,20 @@ void runBpeDemo(
     const std::string& path,
     const std::uint64_t maxLines,
     const std::size_t mergeCount,
-    const std::string& sampleText
+    const std::string& sampleText,
+    const bool useIndexedQueue
 ) {
     const tfs::BpeTrainer trainer;
-    const auto result = trainer.trainFromCorpus(path, maxLines, mergeCount);
+    const auto result = useIndexedQueue
+        ? trainer.trainFromCorpusWithQueue(path, maxLines, mergeCount)
+        : trainer.trainFromCorpus(path, maxLines, mergeCount);
     const auto& model = result.model;
     const auto& merges = model.getMerges();
 
     std::cout << "Corpus: " << path << '\n';
+    if (useIndexedQueue) {
+        std::cout << "Trainer: indexed priority queue\n";
+    }
     std::cout << "Training lines: " << result.lineCount << '\n';
     std::cout << "Requested merges: " << mergeCount << '\n';
     std::cout << "Learned merges: " << merges.size() << '\n';
@@ -339,6 +347,53 @@ void runBpeDemo(
     printBpeTokens(tokens);
     std::cout << "Sample bytes/tokens: " << sampleText.size() << " / " << tokens.size() << '\n';
     std::cout << "Decoded: " << decoded << '\n';
+}
+
+void runBpeCompareDemo(
+    const std::string& path,
+    const std::uint64_t maxLines,
+    const std::size_t mergeCount
+) {
+    const tfs::BpeTrainer trainer;
+
+    tfs::BpeTrainingResult naiveResult;
+    const double naiveMilliseconds = measureMilliseconds([&]() {
+        naiveResult = trainer.trainFromCorpus(path, maxLines, mergeCount);
+    });
+
+    tfs::BpeTrainingResult queueResult;
+    const double queueMilliseconds = measureMilliseconds([&]() {
+        queueResult = trainer.trainFromCorpusWithQueue(path, maxLines, mergeCount);
+    });
+
+    const auto& naiveMerges = naiveResult.model.getMerges();
+    const auto& queueMerges = queueResult.model.getMerges();
+    bool sameMerges = naiveMerges.size() == queueMerges.size();
+
+    for (std::size_t i = 0; i < naiveMerges.size() && i < queueMerges.size(); ++i) {
+        const tfs::BpeMerge& naiveMerge = naiveMerges[i];
+        const tfs::BpeMerge& queueMerge = queueMerges[i];
+        if (naiveMerge.left != queueMerge.left
+            || naiveMerge.right != queueMerge.right
+            || naiveMerge.token != queueMerge.token
+            || naiveMerge.count != queueMerge.count) {
+            sameMerges = false;
+            break;
+        }
+    }
+
+    std::cout << "Corpus: " << path << '\n';
+    std::cout << "Training lines: " << naiveResult.lineCount << '\n';
+    std::cout << "Requested merges: " << mergeCount << '\n';
+    std::cout << std::fixed << std::setprecision(3);
+    std::cout << "Naive trainer: " << naiveMilliseconds << " ms\n";
+    std::cout << "IndexedPQ trainer: " << queueMilliseconds << " ms\n";
+    std::cout << "Speedup: " << naiveMilliseconds / queueMilliseconds << "x\n";
+    std::cout << "Naive learned/final tokens: "
+              << naiveMerges.size() << " / " << naiveResult.finalTokenCount << '\n';
+    std::cout << "IndexedPQ learned/final tokens: "
+              << queueMerges.size() << " / " << queueResult.finalTokenCount << '\n';
+    std::cout << "Same merges: " << (sameMerges ? "yes" : "no") << '\n';
 }
 
 } // namespace
@@ -388,7 +443,34 @@ int main(const int argc, char** argv) {
             const std::size_t mergeCount = argc >= 5 ? static_cast<std::size_t>(parseU64(argv[4])) : 32;
             const std::string sampleText = argc >= 6 ? argv[5] : "the transformer learns from text";
 
-            runBpeDemo(argv[2], maxLines, mergeCount, sampleText);
+            runBpeDemo(argv[2], maxLines, mergeCount, sampleText, false);
+            return 0;
+        }
+
+        if (mode == "--bpe-fast") {
+            if (argc < 3 || argc > 6) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            const std::uint64_t maxLines = argc >= 4 ? parseU64(argv[3]) : 1000;
+            const std::size_t mergeCount = argc >= 5 ? static_cast<std::size_t>(parseU64(argv[4])) : 32;
+            const std::string sampleText = argc >= 6 ? argv[5] : "the transformer learns from text";
+
+            runBpeDemo(argv[2], maxLines, mergeCount, sampleText, true);
+            return 0;
+        }
+
+        if (mode == "--bpe-compare") {
+            if (argc < 3 || argc > 5) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            const std::uint64_t maxLines = argc >= 4 ? parseU64(argv[3]) : 2000;
+            const std::size_t mergeCount = argc >= 5 ? static_cast<std::size_t>(parseU64(argv[4])) : 128;
+
+            runBpeCompareDemo(argv[2], maxLines, mergeCount);
             return 0;
         }
 

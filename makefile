@@ -16,6 +16,8 @@ BPE_TEXT ?= the transformer learns from text
 BENCH_LINES ?= 1000000
 BENCH_CANDIDATES ?= 1000000
 BENCH_ITERATIONS ?= 1000
+COMPARE_LINES ?= 2000
+COMPARE_MERGES ?= 128
 
 SRC := src/main.cpp
 OBJ := $(patsubst %.cpp,$(OBJDIR)/%.o,$(SRC))
@@ -39,7 +41,7 @@ else
 	LFLAGS :=
 endif
 
-.PHONY: all release run corpus bpe ipq ipq-benchmark clean mrproper
+.PHONY: all release run corpus bpe bpe-fast bpe-compare ipq ipq-benchmark clean mrproper
 
 all: $(TARGET_PATH)
 
@@ -54,6 +56,12 @@ corpus: $(TARGET_PATH)
 
 bpe: $(TARGET_PATH)
 	./$(TARGET_PATH) --bpe "$(CORPUS)" $(BPE_LINES) $(BPE_MERGES) "$(BPE_TEXT)"
+
+bpe-fast: $(TARGET_PATH)
+	./$(TARGET_PATH) --bpe-fast "$(CORPUS)" $(BPE_LINES) $(BPE_MERGES) "$(BPE_TEXT)"
+
+bpe-compare: $(TARGET_PATH)
+	./$(TARGET_PATH) --bpe-compare "$(CORPUS)" $(COMPARE_LINES) $(COMPARE_MERGES)
 
 ipq: $(TARGET_PATH)
 	./$(TARGET_PATH) --ipq
