@@ -1,5 +1,6 @@
 #include "tfs/attention_projections.h"
 #include "tfs/attention_scores.h"
+#include "tfs/attention_weights.h"
 #include "tfs/bpe_tokenizer.h"
 #include "tfs/byte_tokenizer.h"
 #include "tfs/corpus_reader.h"
@@ -41,6 +42,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --linear\n"
               << "  " << executable << " --qkv\n"
               << "  " << executable << " --attention-scores\n"
+              << "  " << executable << " --attention-weights\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -588,6 +590,106 @@ void runAttentionScoreDemo() {
     std::cout << "Masking and softmax come next\n";
 }
 
+void printRowSums(const tfs::Tensor& matrix) {
+    const auto& shape = matrix.getShape();
+    const auto& strides = matrix.getStrides();
+    const tfs::TensorValue* const values = matrix.data();
+
+    const std::size_t rows = shape[0];
+    const std::size_t columns = shape[1];
+    const std::size_t rowStride = strides[0];
+    const std::size_t columnStride = strides[1];
+
+    std::cout << "Row sums:";
+    for (std::size_t row = 0; row < rows; ++row) {
+        const std::size_t rowOffset = row * rowStride;
+        tfs::TensorValue sum = 0.0f;
+
+        for (std::size_t column = 0; column < columns; ++column) {
+            sum += values[rowOffset + column * columnStride];
+        }
+
+        std::cout << ' ' << sum;
+    }
+    std::cout << '\n';
+}
+
+void runAttentionWeightDemo() {
+    const tfs::TokenEmbedding tokenEmbedding(
+        6,
+        3,
+        {
+            0.00f, 0.01f, 0.02f,
+            0.10f, 0.11f, 0.12f,
+            0.20f, 0.21f, 0.22f,
+            0.30f, 0.31f, 0.32f,
+            0.40f, 0.41f, 0.42f,
+            0.50f, 0.51f, 0.52f
+        }
+    );
+    const tfs::PositionEmbedding positionEmbedding(
+        4,
+        3,
+        {
+            0.00f, 1.00f, 2.00f,
+            0.01f, 1.01f, 2.01f,
+            0.02f, 1.02f, 2.02f,
+            0.03f, 1.03f, 2.03f
+        }
+    );
+    const tfs::AttentionProjections projections(
+        3,
+        2,
+        {
+            0.50f, -0.25f,
+            1.00f, 0.00f,
+            -0.50f, 0.75f
+        },
+        {0.10f, -0.20f},
+        {
+            0.25f, 0.50f,
+            -0.50f, 0.25f,
+            1.00f, -0.75f
+        },
+        {0.00f, 0.10f},
+        {
+            1.00f, 0.00f,
+            0.00f, 1.00f,
+            0.50f, 0.50f
+        },
+        {-0.10f, 0.20f}
+    );
+    const std::vector<tfs::TokenId> tokens = {3, 1, 4, 1};
+    const tfs::Tensor tokenVectors = tokenEmbedding.embed(tokens);
+    const tfs::Tensor transformerInput = positionEmbedding.addTo(tokenVectors);
+    const tfs::AttentionProjectionResult projectionsResult = projections.forward(transformerInput);
+    const tfs::Tensor scores = tfs::attentionScores(projectionsResult.queries, projectionsResult.keys);
+    const tfs::Tensor maskedScores = tfs::applyCausalMask(scores);
+    const tfs::Tensor weights = tfs::attentionWeights(scores);
+
+    std::cout << "Score shape: ";
+    printList(scores.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Weight shape: ";
+    printList(weights.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Attention scores:\n";
+    printMatrix(scores);
+    std::cout << "Masked scores:\n";
+    printMatrix(maskedScores);
+    std::cout << "Attention weights:\n";
+    printMatrix(weights);
+    printRowSums(weights);
+    std::cout << std::defaultfloat;
+
+    std::cout << "Future positions have weight 0 after masking\n";
+    std::cout << "Each row is a probability distribution\n";
+    std::cout << "Values are mixed in the next lesson\n";
+}
+
 void runIndexedPriorityQueueDemo() {
     tfs::IndexedPriorityQueue<std::string, std::uint64_t> queue;
 
@@ -989,6 +1091,16 @@ int main(const int argc, char** argv) {
             }
 
             runAttentionScoreDemo();
+            return 0;
+        }
+
+        if (mode == "--attention-weights") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runAttentionWeightDemo();
             return 0;
         }
 
