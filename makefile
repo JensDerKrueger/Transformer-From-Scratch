@@ -41,7 +41,7 @@ else
 	LFLAGS :=
 endif
 
-.PHONY: all release run corpus bpe bpe-fast bpe-compare tensor matmul embedding position linear qkv attention-scores attention-weights attention-output attention-output-projection ipq ipq-benchmark clean mrproper
+.PHONY: all release run corpus bpe bpe-fast bpe-compare tensor matmul embedding position linear qkv attention-scores attention-weights attention-output attention-output-projection attention-residual ipq ipq-benchmark clean mrproper
 
 all: $(TARGET_PATH)
 
@@ -92,6 +92,9 @@ attention-output: $(TARGET_PATH)
 
 attention-output-projection: $(TARGET_PATH)
 	./$(TARGET_PATH) --attention-output-projection
+
+attention-residual: $(TARGET_PATH)
+	./$(TARGET_PATH) --attention-residual
 
 ipq: $(TARGET_PATH)
 	./$(TARGET_PATH) --ipq
