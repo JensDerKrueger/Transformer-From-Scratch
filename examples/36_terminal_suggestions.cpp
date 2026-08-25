@@ -3,7 +3,6 @@
 #include "tfs/checkpoint.h"
 #include "tfs/random_initializer.h"
 #include "tfs/tiny_language_model.h"
-#include "tfs/token_dataset.h"
 #include "tfs/word_suggestions.h"
 
 #include <exception>
@@ -45,8 +44,11 @@ void trainToyModel(tfs::TinyLanguageModel& model) {
     }
 }
 
-void printSuggestions(const tfs::TinyLanguageModel& model, const std::string& prompt) {
-    const std::vector<std::string> candidates = {"gut", "schlecht", "spannend", "langweilig"};
+void printSuggestions(
+    const tfs::TinyLanguageModel& model,
+    const std::string& prompt,
+    const std::vector<std::string>& candidates
+) {
     const std::vector<tfs::WordSuggestion> suggestions = tfs::rankCandidateWords(model, prompt, candidates, 3);
 
     std::cout << "Prompt: " << prompt << '\n';
@@ -55,11 +57,11 @@ void printSuggestions(const tfs::TinyLanguageModel& model, const std::string& pr
     }
 }
 
-void runLineMode(tfs::TinyLanguageModel& model) {
+void runLineMode(const tfs::TinyLanguageModel& model, const std::vector<std::string>& candidates) {
     std::string text;
 
     while (true) {
-        printSuggestions(model, text);
+        printSuggestions(model, text, candidates);
         std::cout << "> ";
 
         std::string input;
@@ -67,7 +69,6 @@ void runLineMode(tfs::TinyLanguageModel& model) {
             break;
         }
 
-        const std::vector<std::string> candidates = {"gut", "schlecht", "spannend", "langweilig"};
         const std::vector<tfs::WordSuggestion> suggestions = tfs::rankCandidateWords(model, text, candidates, 3);
         if (input.size() == 1 && input[0] >= '1' && input[0] <= '3') {
             const std::size_t index = static_cast<std::size_t>(input[0] - '1');
@@ -83,6 +84,21 @@ void runLineMode(tfs::TinyLanguageModel& model) {
     }
 }
 
+std::vector<std::string> toyCandidates() {
+    return {"gut", "schlecht", "spannend", "langweilig"};
+}
+
+void loadCheckpoint(tfs::TinyLanguageModel& model, const std::string& checkpointPath) {
+    tfs::loadParameters(checkpointPath, model.parameters());
+}
+
+void printUsage(const char* const programName) {
+    std::cerr << "Usage:\n";
+    std::cerr << "  " << programName << " --suggest checkpoint corpus prompt maxBytes candidateCount\n";
+    std::cerr << "  " << programName << " --interactive checkpoint corpus maxBytes candidateCount\n";
+    std::cerr << "  " << programName << " --toy [prompt]\n";
+}
+
 } // namespace
 
 int main(const int argc, char** argv) {
@@ -96,15 +112,51 @@ int main(const int argc, char** argv) {
         tfs::RandomInitializer initializer(41);
         tfs::TinyLanguageModel model(config);
         model.initialize(initializer);
-        trainToyModel(model);
 
-        if (argc >= 2 && std::string(argv[1]) == "--interactive") {
-            runLineMode(model);
+        if (argc >= 2 && std::string(argv[1]) == "--toy") {
+            trainToyModel(model);
+            const std::string prompt = argc >= 3 ? argv[2] : "der film war ";
+            printSuggestions(model, prompt, toyCandidates());
+            std::cout << "Toy mode trains on fixed phrases inside this demo\n";
             return 0;
         }
 
-        const std::string prompt = argc >= 2 ? argv[1] : "der film war ";
-        printSuggestions(model, prompt);
+        if (argc >= 2 && std::string(argv[1]) == "--interactive") {
+            if (argc != 6) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            const std::string checkpointPath = argv[2];
+            const std::string corpusPath = argv[3];
+            const std::size_t maxBytes = static_cast<std::size_t>(demo::parseU64(argv[4]));
+            const std::size_t candidateCount = static_cast<std::size_t>(demo::parseU64(argv[5]));
+            loadCheckpoint(model, checkpointPath);
+            const std::vector<std::string> candidates =
+                tfs::readFrequentWordsFromFile(corpusPath, maxBytes, candidateCount, 3);
+            runLineMode(model, candidates);
+            return 0;
+        }
+
+        if (argc != 7 || std::string(argv[1]) != "--suggest") {
+            printUsage(argv[0]);
+            return 1;
+        }
+
+        const std::string checkpointPath = argv[2];
+        const std::string corpusPath = argv[3];
+        const std::string prompt = argv[4];
+        const std::size_t maxBytes = static_cast<std::size_t>(demo::parseU64(argv[5]));
+        const std::size_t candidateCount = static_cast<std::size_t>(demo::parseU64(argv[6]));
+
+        loadCheckpoint(model, checkpointPath);
+        const std::vector<std::string> candidates =
+            tfs::readFrequentWordsFromFile(corpusPath, maxBytes, candidateCount, 3);
+
+        printSuggestions(model, prompt, candidates);
+        std::cout << "Checkpoint: " << checkpointPath << '\n';
+        std::cout << "Candidate corpus: " << corpusPath << '\n';
+        std::cout << "Candidate words: " << candidates.size() << '\n';
         std::cout << "Type 1, 2 or 3 in interactive mode to accept a suggestion\n";
         std::cout << "Any other text continues the prompt manually\n";
     } catch (const std::exception& error) {

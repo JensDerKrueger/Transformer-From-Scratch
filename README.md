@@ -76,5 +76,20 @@ make ipq
 make ipq-benchmark
 ```
 
+To train the tiny byte-level model on the Leipzig corpus and use the resulting
+checkpoint for suggestions:
+
+```sh
+make train-lm TRAIN_BYTES=1000000 TRAIN_STEPS=2000 CHECKPOINT=build/debug/leipzig1M.params
+make suggestions CHECKPOINT=build/debug/leipzig1M.params SUGGEST_BYTES=1000000 SUGGEST_CANDIDATES=1000 PROMPT="der film war "
+```
+
+`make suggestions` loads the checkpoint and extracts frequent candidate words
+from the corpus. The explicit toy demo is still available with:
+
+```sh
+./build/debug/tfs_demo --toy "der film war "
+```
+
 The corpus file is not part of this repository. By default the makefile expects
 `data/leipzig1M.txt`; see `data/README.md` for a reproducible download recipe.

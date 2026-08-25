@@ -19,6 +19,11 @@ BENCH_ITERATIONS ?= 1000
 TRAIN_BYTES ?= 20000
 TRAIN_STEPS ?= 20
 CHECKPOINT ?= build/debug/tiny_lm.params
+SUGGEST_BYTES ?= $(TRAIN_BYTES)
+SUGGEST_CANDIDATES ?= 200
+empty :=
+space := $(empty) $(empty)
+PROMPT ?= der film war$(space)
 
 INCLUDES := -Iinclude -Iexamples
 WARNINGS := -Wall -Wextra -Wpedantic -Wunreachable-code
@@ -211,7 +216,7 @@ checkpoint:
 
 suggestions:
 	$(call build_example,36_terminal_suggestions)
-	./$(TARGET_PATH) "der film war "
+	./$(TARGET_PATH) --suggest "$(CHECKPOINT)" "$(CORPUS)" "$(PROMPT)" $(SUGGEST_BYTES) $(SUGGEST_CANDIDATES)
 
 clean:
 	rm -rf build/debug build/release

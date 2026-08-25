@@ -8,7 +8,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cctype>
+#include <fstream>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace tfs {
@@ -17,6 +20,75 @@ struct WordSuggestion {
     std::string word;
     TensorValue score = 0.0f;
 };
+
+inline bool isWordByte(const unsigned char byte) {
+    return std::isalpha(byte) != 0 || byte >= 128;
+}
+
+inline char normalizedAsciiByte(const unsigned char byte) {
+    if (byte < 128) {
+        return static_cast<char>(std::tolower(byte));
+    }
+    return static_cast<char>(byte);
+}
+
+inline std::vector<std::string> readFrequentWordsFromFile(
+    const std::string& path,
+    const std::size_t maxBytes,
+    const std::size_t maxWords,
+    const std::size_t minLength
+) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("Could not open corpus for word extraction: " + path);
+    }
+
+    std::unordered_map<std::string, std::size_t> frequencies;
+    std::string word;
+    std::size_t bytesRead = 0;
+
+    char input = 0;
+    while (bytesRead < maxBytes && file.get(input)) {
+        ++bytesRead;
+        const unsigned char byte = static_cast<unsigned char>(input);
+        if (isWordByte(byte)) {
+            word.push_back(normalizedAsciiByte(byte));
+        } else {
+            if (word.size() >= minLength) {
+                ++frequencies[word];
+            }
+            word.clear();
+        }
+    }
+
+    if (word.size() >= minLength) {
+        ++frequencies[word];
+    }
+
+    std::vector<std::pair<std::string, std::size_t>> sortedWords;
+    sortedWords.reserve(frequencies.size());
+    for (const auto& entry : frequencies) {
+        sortedWords.push_back(entry);
+    }
+
+    std::sort(sortedWords.begin(), sortedWords.end(), [](const auto& left, const auto& right) {
+        if (left.second != right.second) {
+            return left.second > right.second;
+        }
+        return left.first < right.first;
+    });
+
+    std::vector<std::string> words;
+    words.reserve(std::min(maxWords, sortedWords.size()));
+    for (const auto& entry : sortedWords) {
+        words.push_back(entry.first);
+        if (words.size() == maxWords) {
+            break;
+        }
+    }
+
+    return words;
+}
 
 inline std::vector<std::size_t> makeContextTokens(
     const std::string& text,
