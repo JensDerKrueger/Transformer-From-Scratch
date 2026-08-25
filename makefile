@@ -1,130 +1,153 @@
 CXX ?= c++
 OSTYPE := $(shell uname)
+
 BUILD ?= debug
-
 OUTDIR := build/$(BUILD)
-OBJDIR := $(OUTDIR)/obj
-DEPDIR := $(OUTDIR)/dep
-
 TARGET := tfs_demo
 TARGET_PATH := $(OUTDIR)/$(TARGET)
+
 CORPUS ?= data/leipzig1M.txt
 MAX_LINES ?= 1000
 BPE_LINES ?= 2000
 BPE_MERGES ?= 32
 BPE_TEXT ?= the transformer learns from text
+COMPARE_LINES ?= 2000
+COMPARE_MERGES ?= 128
 BENCH_LINES ?= 1000000
 BENCH_CANDIDATES ?= 1000000
 BENCH_ITERATIONS ?= 1000
-COMPARE_LINES ?= 2000
-COMPARE_MERGES ?= 128
 
-SRC := src/main.cpp
-OBJ := $(patsubst %.cpp,$(OBJDIR)/%.o,$(SRC))
-DEP := $(patsubst %.cpp,$(DEPDIR)/%.d,$(SRC))
-
-INCLUDES := -Iinclude
+INCLUDES := -Iinclude -Iexamples
 WARNINGS := -Wall -Wextra -Wpedantic -Wunreachable-code
 CPPSTD := -std=c++20
 
 ifeq ($(BUILD),release)
-	OPTFLAGS := -O3 -DNDEBUG
+  OPTFLAGS := -O3 -DNDEBUG
 else
-	OPTFLAGS := -g -O0
+  OPTFLAGS := -g -O0
 endif
 
 ifeq ($(OSTYPE),Linux)
-	CXXFLAGS := $(CPPSTD) $(WARNINGS) $(OPTFLAGS)
-	LFLAGS :=
+  CXXFLAGS := $(CPPSTD) $(WARNINGS) $(OPTFLAGS)
+  LFLAGS :=
 else
-	CXXFLAGS := $(CPPSTD) $(WARNINGS) $(OPTFLAGS)
-	LFLAGS :=
+  CXXFLAGS := $(CPPSTD) $(WARNINGS) $(OPTFLAGS)
+  LFLAGS :=
 endif
 
-.PHONY: all release run corpus bpe bpe-fast bpe-compare tensor matmul embedding position linear qkv attention-scores attention-weights attention-output attention-output-projection attention-residual layer-norm ipq ipq-benchmark clean mrproper
+define build_example
+	@mkdir -p $(OUTDIR)
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) examples/$(1).cpp $(LFLAGS) -o $(TARGET_PATH)
+endef
 
-all: $(TARGET_PATH)
+.PHONY: all release run corpus bpe bpe-fast bpe-compare ipq ipq-benchmark
+.PHONY: tensor matmul embedding position linear qkv attention-scores attention-weights
+.PHONY: attention-output attention-output-projection attention-residual layer-norm
+.PHONY: activation feed-forward feed-forward-block decoder-block logits clean mrproper
+
+all: run
 
 release:
-	$(MAKE) BUILD=release all
+	$(MAKE) BUILD=release run
 
-run: $(TARGET_PATH)
+run:
+	$(call build_example,01_byte_tokenizer)
 	./$(TARGET_PATH)
 
-corpus: $(TARGET_PATH)
+corpus:
+	$(call build_example,02_corpus_reader)
 	./$(TARGET_PATH) --corpus "$(CORPUS)" $(MAX_LINES)
 
-bpe: $(TARGET_PATH)
+bpe:
+	$(call build_example,03_bpe_tokenizer)
 	./$(TARGET_PATH) --bpe "$(CORPUS)" $(BPE_LINES) $(BPE_MERGES) "$(BPE_TEXT)"
 
-bpe-fast: $(TARGET_PATH)
+bpe-fast:
+	$(call build_example,04_bpe_fast)
 	./$(TARGET_PATH) --bpe-fast "$(CORPUS)" $(BPE_LINES) $(BPE_MERGES) "$(BPE_TEXT)"
 
-bpe-compare: $(TARGET_PATH)
+bpe-compare:
+	$(call build_example,04_bpe_compare)
 	./$(TARGET_PATH) --bpe-compare "$(CORPUS)" $(COMPARE_LINES) $(COMPARE_MERGES)
 
-tensor: $(TARGET_PATH)
-	./$(TARGET_PATH) --tensor
-
-matmul: $(TARGET_PATH)
-	./$(TARGET_PATH) --matmul
-
-embedding: $(TARGET_PATH)
-	./$(TARGET_PATH) --embedding
-
-position: $(TARGET_PATH)
-	./$(TARGET_PATH) --position
-
-linear: $(TARGET_PATH)
-	./$(TARGET_PATH) --linear
-
-qkv: $(TARGET_PATH)
-	./$(TARGET_PATH) --qkv
-
-attention-scores: $(TARGET_PATH)
-	./$(TARGET_PATH) --attention-scores
-
-attention-weights: $(TARGET_PATH)
-	./$(TARGET_PATH) --attention-weights
-
-attention-output: $(TARGET_PATH)
-	./$(TARGET_PATH) --attention-output
-
-attention-output-projection: $(TARGET_PATH)
-	./$(TARGET_PATH) --attention-output-projection
-
-attention-residual: $(TARGET_PATH)
-	./$(TARGET_PATH) --attention-residual
-
-layer-norm: $(TARGET_PATH)
-	./$(TARGET_PATH) --layer-norm
-
-ipq: $(TARGET_PATH)
+ipq:
+	$(call build_example,04a_indexed_priority_queue)
 	./$(TARGET_PATH) --ipq
 
 ipq-benchmark:
-	$(MAKE) BUILD=release all
+	@mkdir -p build/release
+	@$(CXX) $(CPPSTD) $(WARNINGS) -O3 -DNDEBUG $(INCLUDES) examples/04a_indexed_priority_queue.cpp $(LFLAGS) -o build/release/$(TARGET)
 	./build/release/$(TARGET) --ipq-benchmark "$(CORPUS)" $(BENCH_LINES) $(BENCH_CANDIDATES) $(BENCH_ITERATIONS)
 
-$(TARGET_PATH): $(OBJ) | $(OUTDIR)
-	$(CXX) $(OBJ) $(LFLAGS) -o $@
+tensor:
+	$(call build_example,05_tensor)
+	./$(TARGET_PATH) --tensor
 
-$(OBJDIR)/%.o: %.cpp | $(OBJDIR) $(DEPDIR)
-	@mkdir -p $(dir $@) $(dir $(patsubst $(OBJDIR)/%.o,$(DEPDIR)/%.d,$@))
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(patsubst $(OBJDIR)/%.o,$(DEPDIR)/%.d,$@) -c $< -o $@
+matmul:
+	$(call build_example,06_matrix_multiplication)
+	./$(TARGET_PATH) --matmul
 
-$(OUTDIR):
-	mkdir -p $@
+embedding:
+	$(call build_example,07_token_embedding)
+	./$(TARGET_PATH) --embedding
 
-$(OBJDIR): | $(OUTDIR)
-	mkdir -p $@
+position:
+	$(call build_example,08_position_embedding)
+	./$(TARGET_PATH) --position
 
-$(DEPDIR): | $(OUTDIR)
-	mkdir -p $@
+linear:
+	$(call build_example,09_linear_layer)
+	./$(TARGET_PATH) --linear
+
+qkv:
+	$(call build_example,10_attention_projections)
+	./$(TARGET_PATH) --qkv
+
+attention-scores:
+	$(call build_example,11_attention_scores)
+	./$(TARGET_PATH) --attention-scores
+
+attention-weights:
+	$(call build_example,12_attention_weights)
+	./$(TARGET_PATH) --attention-weights
+
+attention-output:
+	$(call build_example,13_attention_output)
+	./$(TARGET_PATH) --attention-output
+
+attention-output-projection:
+	$(call build_example,14_attention_output_projection)
+	./$(TARGET_PATH) --attention-output-projection
+
+attention-residual:
+	$(call build_example,15_residual_connection)
+	./$(TARGET_PATH) --attention-residual
+
+layer-norm:
+	$(call build_example,16_layer_norm)
+	./$(TARGET_PATH) --layer-norm
+
+activation:
+	$(call build_example,17_gelu_activation)
+	./$(TARGET_PATH) --activation
+
+feed-forward:
+	$(call build_example,18_feed_forward)
+	./$(TARGET_PATH) --feed-forward
+
+feed-forward-block:
+	$(call build_example,19_feed_forward_block)
+	./$(TARGET_PATH) --feed-forward-block
+
+decoder-block:
+	$(call build_example,20_decoder_block)
+	./$(TARGET_PATH) --decoder-block
+
+logits:
+	$(call build_example,21_logits)
+	./$(TARGET_PATH) --logits
 
 clean:
-	-rm -rf build
+	rm -rf build/debug build/release
 
 mrproper: clean
-
--include $(DEP)
