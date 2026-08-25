@@ -1,3 +1,4 @@
+#include "tfs/attention_output.h"
 #include "tfs/attention_projections.h"
 #include "tfs/attention_scores.h"
 #include "tfs/attention_weights.h"
@@ -43,6 +44,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --qkv\n"
               << "  " << executable << " --attention-scores\n"
               << "  " << executable << " --attention-weights\n"
+              << "  " << executable << " --attention-output\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -690,6 +692,85 @@ void runAttentionWeightDemo() {
     std::cout << "Values are mixed in the next lesson\n";
 }
 
+void runAttentionOutputDemo() {
+    const tfs::TokenEmbedding tokenEmbedding(
+        6,
+        3,
+        {
+            0.00f, 0.01f, 0.02f,
+            0.10f, 0.11f, 0.12f,
+            0.20f, 0.21f, 0.22f,
+            0.30f, 0.31f, 0.32f,
+            0.40f, 0.41f, 0.42f,
+            0.50f, 0.51f, 0.52f
+        }
+    );
+    const tfs::PositionEmbedding positionEmbedding(
+        4,
+        3,
+        {
+            0.00f, 1.00f, 2.00f,
+            0.01f, 1.01f, 2.01f,
+            0.02f, 1.02f, 2.02f,
+            0.03f, 1.03f, 2.03f
+        }
+    );
+    const tfs::AttentionProjections projections(
+        3,
+        2,
+        {
+            0.50f, -0.25f,
+            1.00f, 0.00f,
+            -0.50f, 0.75f
+        },
+        {0.10f, -0.20f},
+        {
+            0.25f, 0.50f,
+            -0.50f, 0.25f,
+            1.00f, -0.75f
+        },
+        {0.00f, 0.10f},
+        {
+            1.00f, 0.00f,
+            0.00f, 1.00f,
+            0.50f, 0.50f
+        },
+        {-0.10f, 0.20f}
+    );
+    const std::vector<tfs::TokenId> tokens = {3, 1, 4, 1};
+    const tfs::Tensor tokenVectors = tokenEmbedding.embed(tokens);
+    const tfs::Tensor transformerInput = positionEmbedding.addTo(tokenVectors);
+    const tfs::AttentionProjectionResult projectionsResult = projections.forward(transformerInput);
+    const tfs::Tensor scores = tfs::attentionScores(projectionsResult.queries, projectionsResult.keys);
+    const tfs::Tensor weights = tfs::attentionWeights(scores);
+    const tfs::Tensor output = tfs::attentionOutput(weights, projectionsResult.values);
+
+    std::cout << "Weight shape: ";
+    printList(weights.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Value shape: ";
+    printList(projectionsResult.values.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Output shape: ";
+    printList(output.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Attention weights:\n";
+    printMatrix(weights);
+    std::cout << "Values:\n";
+    printMatrix(projectionsResult.values);
+    std::cout << "Attention output:\n";
+    printMatrix(output);
+    std::cout << std::defaultfloat;
+
+    std::cout << "Each output row is a weighted sum of value rows\n";
+    std::cout << "The output has one context vector per input token\n";
+    std::cout << "This is single-head masked self-attention without the final projection\n";
+}
+
 void runIndexedPriorityQueueDemo() {
     tfs::IndexedPriorityQueue<std::string, std::uint64_t> queue;
 
@@ -1101,6 +1182,16 @@ int main(const int argc, char** argv) {
             }
 
             runAttentionWeightDemo();
+            return 0;
+        }
+
+        if (mode == "--attention-output") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runAttentionOutputDemo();
             return 0;
         }
 
