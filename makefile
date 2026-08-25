@@ -43,7 +43,8 @@ endef
 .PHONY: all release run corpus bpe bpe-fast bpe-compare ipq ipq-benchmark
 .PHONY: tensor matmul embedding position linear qkv attention-scores attention-weights
 .PHONY: attention-output attention-output-projection attention-residual layer-norm
-.PHONY: activation feed-forward feed-forward-block decoder-block logits clean mrproper
+.PHONY: activation feed-forward feed-forward-block decoder-block logits softmax cross-entropy
+.PHONY: parameters linear-backward sgd-step clean mrproper
 
 all: run
 
@@ -146,6 +147,26 @@ decoder-block:
 logits:
 	$(call build_example,21_logits)
 	./$(TARGET_PATH) --logits
+
+softmax:
+	$(call build_example,22_softmax_topk)
+	./$(TARGET_PATH) --softmax
+
+cross-entropy:
+	$(call build_example,23_cross_entropy)
+	./$(TARGET_PATH) --cross-entropy
+
+parameters:
+	$(call build_example,24_parameters)
+	./$(TARGET_PATH) --parameters
+
+linear-backward:
+	$(call build_example,25_linear_backward)
+	./$(TARGET_PATH) --linear-backward
+
+sgd-step:
+	$(call build_example,26_sgd_training_step)
+	./$(TARGET_PATH) --sgd-step
 
 clean:
 	rm -rf build/debug build/release

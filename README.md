@@ -17,6 +17,8 @@ current code covers:
 - residual connections and layer normalization
 - GELU activation and feed-forward networks
 - a first decoder block and language-model logits
+- final softmax, top-k selection and cross-entropy loss
+- trainable parameters, linear-layer backpropagation and a first SGD step
 
 The reusable implementation lives in `include/tfs`. Each lesson has its own
 small program in `examples`, so later lessons do not change the source shown by
@@ -53,6 +55,11 @@ make feed-forward
 make feed-forward-block
 make decoder-block
 make logits
+make softmax
+make cross-entropy
+make parameters
+make linear-backward
+make sgd-step
 make ipq
 make ipq-benchmark
 ```
