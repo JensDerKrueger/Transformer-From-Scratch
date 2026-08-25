@@ -16,6 +16,9 @@ COMPARE_MERGES ?= 128
 BENCH_LINES ?= 1000000
 BENCH_CANDIDATES ?= 1000000
 BENCH_ITERATIONS ?= 1000
+TRAIN_BYTES ?= 20000
+TRAIN_STEPS ?= 20
+CHECKPOINT ?= build/debug/tiny_lm.params
 
 INCLUDES := -Iinclude -Iexamples
 WARNINGS := -Wall -Wextra -Wpedantic -Wunreachable-code
@@ -45,6 +48,8 @@ endef
 .PHONY: attention-output attention-output-projection attention-residual layer-norm
 .PHONY: activation feed-forward feed-forward-block decoder-block logits softmax cross-entropy
 .PHONY: parameters linear-backward sgd-step clean mrproper
+.PHONY: trainable-embedding initialization token-windows layernorm-backward attention-backward
+.PHONY: decoder-backward tiny-lm train-lm checkpoint suggestions
 
 all: run
 
@@ -167,6 +172,46 @@ linear-backward:
 sgd-step:
 	$(call build_example,26_sgd_training_step)
 	./$(TARGET_PATH) --sgd-step
+
+trainable-embedding:
+	$(call build_example,27_trainable_embedding)
+	./$(TARGET_PATH) --trainable-embedding
+
+initialization:
+	$(call build_example,28_random_initialization)
+	./$(TARGET_PATH) --initialization
+
+token-windows:
+	$(call build_example,29_token_windows)
+	./$(TARGET_PATH) --token-windows
+
+layernorm-backward:
+	$(call build_example,30_layernorm_backward)
+	./$(TARGET_PATH) --layernorm-backward
+
+attention-backward:
+	$(call build_example,31_attention_backward)
+	./$(TARGET_PATH) --attention-backward
+
+decoder-backward:
+	$(call build_example,32_decoder_block_backward)
+	./$(TARGET_PATH) --decoder-backward
+
+tiny-lm:
+	$(call build_example,33_tiny_language_model)
+	./$(TARGET_PATH) --tiny-lm
+
+train-lm:
+	$(call build_example,34_train_byte_language_model)
+	./$(TARGET_PATH) --train-lm "$(CORPUS)" $(TRAIN_BYTES) $(TRAIN_STEPS) "$(CHECKPOINT)"
+
+checkpoint:
+	$(call build_example,35_checkpoint)
+	./$(TARGET_PATH) --checkpoint
+
+suggestions:
+	$(call build_example,36_terminal_suggestions)
+	./$(TARGET_PATH) "der film war "
 
 clean:
 	rm -rf build/debug build/release

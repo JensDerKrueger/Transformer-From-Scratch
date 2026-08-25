@@ -19,6 +19,8 @@ current code covers:
 - a first decoder block and language-model logits
 - final softmax, top-k selection and cross-entropy loss
 - trainable parameters, linear-layer backpropagation and a first SGD step
+- trainable embeddings, LayerNorm and Attention backward passes
+- a tiny decoder-only language model with corpus training, checkpoints and terminal suggestions
 
 The reusable implementation lives in `include/tfs`. Each lesson has its own
 small program in `examples`, so later lessons do not change the source shown by
@@ -60,6 +62,16 @@ make cross-entropy
 make parameters
 make linear-backward
 make sgd-step
+make trainable-embedding
+make initialization
+make token-windows
+make layernorm-backward
+make attention-backward
+make decoder-backward
+make tiny-lm
+make train-lm
+make checkpoint
+make suggestions
 make ipq
 make ipq-benchmark
 ```
