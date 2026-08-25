@@ -68,4 +68,36 @@ inline Tensor matrixMultiply(const Tensor& left, const Tensor& right) {
     return result;
 }
 
+inline Tensor transposeMatrix(const Tensor& matrix) {
+    requireMatrix(matrix, "matrix");
+
+    const TensorShape& shape = matrix.getShape();
+    const std::size_t rows = shape[0];
+    const std::size_t columns = shape[1];
+
+    Tensor result(TensorShape({columns, rows}));
+
+    const std::vector<std::size_t>& matrixStrides = matrix.getStrides();
+    const std::vector<std::size_t>& resultStrides = result.getStrides();
+
+    const TensorValue* const matrixData = matrix.data();
+    TensorValue* const resultData = result.data();
+
+    const std::size_t matrixRowStride = matrixStrides[0];
+    const std::size_t matrixColumnStride = matrixStrides[1];
+    const std::size_t resultRowStride = resultStrides[0];
+    const std::size_t resultColumnStride = resultStrides[1];
+
+    for (std::size_t row = 0; row < rows; ++row) {
+        const std::size_t matrixRowOffset = row * matrixRowStride;
+
+        for (std::size_t column = 0; column < columns; ++column) {
+            resultData[column * resultRowStride + row * resultColumnStride] =
+                matrixData[matrixRowOffset + column * matrixColumnStride];
+        }
+    }
+
+    return result;
+}
+
 } // namespace tfs
