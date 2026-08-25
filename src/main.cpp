@@ -1,4 +1,5 @@
 #include "tfs/attention_output.h"
+#include "tfs/attention_output_projection.h"
 #include "tfs/attention_projections.h"
 #include "tfs/attention_scores.h"
 #include "tfs/attention_weights.h"
@@ -45,6 +46,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --attention-scores\n"
               << "  " << executable << " --attention-weights\n"
               << "  " << executable << " --attention-output\n"
+              << "  " << executable << " --attention-output-projection\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -771,6 +773,97 @@ void runAttentionOutputDemo() {
     std::cout << "This is single-head masked self-attention without the final projection\n";
 }
 
+void runAttentionOutputProjectionDemo() {
+    const tfs::TokenEmbedding tokenEmbedding(
+        6,
+        3,
+        {
+            0.00f, 0.01f, 0.02f,
+            0.10f, 0.11f, 0.12f,
+            0.20f, 0.21f, 0.22f,
+            0.30f, 0.31f, 0.32f,
+            0.40f, 0.41f, 0.42f,
+            0.50f, 0.51f, 0.52f
+        }
+    );
+    const tfs::PositionEmbedding positionEmbedding(
+        4,
+        3,
+        {
+            0.00f, 1.00f, 2.00f,
+            0.01f, 1.01f, 2.01f,
+            0.02f, 1.02f, 2.02f,
+            0.03f, 1.03f, 2.03f
+        }
+    );
+    const tfs::AttentionProjections projections(
+        3,
+        2,
+        {
+            0.50f, -0.25f,
+            1.00f, 0.00f,
+            -0.50f, 0.75f
+        },
+        {0.10f, -0.20f},
+        {
+            0.25f, 0.50f,
+            -0.50f, 0.25f,
+            1.00f, -0.75f
+        },
+        {0.00f, 0.10f},
+        {
+            1.00f, 0.00f,
+            0.00f, 1.00f,
+            0.50f, 0.50f
+        },
+        {-0.10f, 0.20f}
+    );
+    const tfs::AttentionOutputProjection outputProjection(
+        2,
+        3,
+        {
+            0.25f, 0.50f, -0.25f,
+            -0.50f, 0.25f, 0.75f
+        },
+        {0.05f, -0.10f, 0.20f}
+    );
+    const std::vector<tfs::TokenId> tokens = {3, 1, 4, 1};
+    const tfs::Tensor tokenVectors = tokenEmbedding.embed(tokens);
+    const tfs::Tensor transformerInput = positionEmbedding.addTo(tokenVectors);
+    const tfs::AttentionProjectionResult projectionsResult = projections.forward(transformerInput);
+    const tfs::Tensor scores = tfs::attentionScores(projectionsResult.queries, projectionsResult.keys);
+    const tfs::Tensor weights = tfs::attentionWeights(scores);
+    const tfs::Tensor attentionContext = tfs::attentionOutput(weights, projectionsResult.values);
+    const tfs::Tensor projected = outputProjection.forward(attentionContext);
+
+    std::cout << "Transformer input shape: ";
+    printList(transformerInput.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Attention context shape: ";
+    printList(attentionContext.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Output projection weight shape: ";
+    printList(outputProjection.getLayer().getWeights().getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "Projected shape: ";
+    printList(projected.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Attention context:\n";
+    printMatrix(attentionContext);
+    std::cout << "Projected vectors:\n";
+    printMatrix(projected);
+    std::cout << std::defaultfloat;
+
+    std::cout << "The projection maps value size 2 back to model size 3\n";
+    std::cout << "Now the tensor has the same shape as the transformer input\n";
+    std::cout << "Residual connections and the next block can use this shape\n";
+}
+
 void runIndexedPriorityQueueDemo() {
     tfs::IndexedPriorityQueue<std::string, std::uint64_t> queue;
 
@@ -1192,6 +1285,16 @@ int main(const int argc, char** argv) {
             }
 
             runAttentionOutputDemo();
+            return 0;
+        }
+
+        if (mode == "--attention-output-projection") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runAttentionOutputProjectionDemo();
             return 0;
         }
 
