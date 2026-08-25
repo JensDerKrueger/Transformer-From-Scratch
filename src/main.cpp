@@ -7,6 +7,7 @@
 #include "tfs/byte_tokenizer.h"
 #include "tfs/corpus_reader.h"
 #include "tfs/indexed_priority_queue.h"
+#include "tfs/layer_norm.h"
 #include "tfs/linear_layer.h"
 #include "tfs/position_embedding.h"
 #include "tfs/residual_connection.h"
@@ -49,6 +50,7 @@ void printUsage(const char* const executable) {
               << "  " << executable << " --attention-output\n"
               << "  " << executable << " --attention-output-projection\n"
               << "  " << executable << " --attention-residual\n"
+              << "  " << executable << " --layer-norm\n"
               << "  " << executable << " --ipq\n"
               << "  " << executable << " --ipq-benchmark path/to/corpus.txt [maxLines] [candidateCount] [iterations]\n";
 }
@@ -620,6 +622,36 @@ void printRowSums(const tfs::Tensor& matrix) {
     std::cout << '\n';
 }
 
+void printRowMeanVariance(const tfs::Tensor& matrix) {
+    const auto& shape = matrix.getShape();
+    const auto& strides = matrix.getStrides();
+    const tfs::TensorValue* const values = matrix.data();
+
+    const std::size_t rows = shape[0];
+    const std::size_t columns = shape[1];
+    const std::size_t rowStride = strides[0];
+    const std::size_t columnStride = strides[1];
+
+    for (std::size_t row = 0; row < rows; ++row) {
+        const std::size_t rowOffset = row * rowStride;
+
+        tfs::TensorValue mean = 0.0f;
+        for (std::size_t column = 0; column < columns; ++column) {
+            mean += values[rowOffset + column * columnStride];
+        }
+        mean /= static_cast<tfs::TensorValue>(columns);
+
+        tfs::TensorValue variance = 0.0f;
+        for (std::size_t column = 0; column < columns; ++column) {
+            const tfs::TensorValue centered = values[rowOffset + column * columnStride] - mean;
+            variance += centered * centered;
+        }
+        variance /= static_cast<tfs::TensorValue>(columns);
+
+        std::cout << "  row " << row << ": mean " << mean << ", variance " << variance << '\n';
+    }
+}
+
 void runAttentionWeightDemo() {
     const tfs::TokenEmbedding tokenEmbedding(
         6,
@@ -954,6 +986,97 @@ void runAttentionResidualDemo() {
     std::cout << "Residual add keeps the original path visible\n";
     std::cout << "Input and branch output must have identical shapes\n";
     std::cout << "Layer normalization comes next in the transformer block\n";
+}
+
+void runLayerNormDemo() {
+    const tfs::TokenEmbedding tokenEmbedding(
+        6,
+        3,
+        {
+            0.00f, 0.01f, 0.02f,
+            0.10f, 0.11f, 0.12f,
+            0.20f, 0.21f, 0.22f,
+            0.30f, 0.31f, 0.32f,
+            0.40f, 0.41f, 0.42f,
+            0.50f, 0.51f, 0.52f
+        }
+    );
+    const tfs::PositionEmbedding positionEmbedding(
+        4,
+        3,
+        {
+            0.00f, 1.00f, 2.00f,
+            0.01f, 1.01f, 2.01f,
+            0.02f, 1.02f, 2.02f,
+            0.03f, 1.03f, 2.03f
+        }
+    );
+    const tfs::AttentionProjections projections(
+        3,
+        2,
+        {
+            0.50f, -0.25f,
+            1.00f, 0.00f,
+            -0.50f, 0.75f
+        },
+        {0.10f, -0.20f},
+        {
+            0.25f, 0.50f,
+            -0.50f, 0.25f,
+            1.00f, -0.75f
+        },
+        {0.00f, 0.10f},
+        {
+            1.00f, 0.00f,
+            0.00f, 1.00f,
+            0.50f, 0.50f
+        },
+        {-0.10f, 0.20f}
+    );
+    const tfs::AttentionOutputProjection outputProjection(
+        2,
+        3,
+        {
+            0.25f, 0.50f, -0.25f,
+            -0.50f, 0.25f, 0.75f
+        },
+        {0.05f, -0.10f, 0.20f}
+    );
+    const tfs::LayerNorm layerNorm(3);
+    const std::vector<tfs::TokenId> tokens = {3, 1, 4, 1};
+    const tfs::Tensor tokenVectors = tokenEmbedding.embed(tokens);
+    const tfs::Tensor transformerInput = positionEmbedding.addTo(tokenVectors);
+    const tfs::AttentionProjectionResult projectionsResult = projections.forward(transformerInput);
+    const tfs::Tensor scores = tfs::attentionScores(projectionsResult.queries, projectionsResult.keys);
+    const tfs::Tensor weights = tfs::attentionWeights(scores);
+    const tfs::Tensor attentionContext = tfs::attentionOutput(weights, projectionsResult.values);
+    const tfs::Tensor projected = outputProjection.forward(attentionContext);
+    const tfs::Tensor residualOutput = tfs::residualAdd(transformerInput, projected);
+    const tfs::Tensor normalized = layerNorm.forward(residualOutput);
+
+    std::cout << "Residual output shape: ";
+    printList(residualOutput.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << "LayerNorm feature size: " << layerNorm.featureSize() << '\n';
+    std::cout << "LayerNorm epsilon: " << layerNorm.getEpsilon() << '\n';
+
+    std::cout << "Normalized shape: ";
+    printList(normalized.getShape().getDimensions());
+    std::cout << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Before LayerNorm:\n";
+    printMatrix(residualOutput);
+    std::cout << "After LayerNorm:\n";
+    printMatrix(normalized);
+    std::cout << "Row mean and variance after LayerNorm:\n";
+    printRowMeanVariance(normalized);
+    std::cout << std::defaultfloat;
+
+    std::cout << "Each token row is normalized independently\n";
+    std::cout << "Gamma and beta can later learn scale and shift\n";
+    std::cout << "The tensor shape is unchanged\n";
 }
 
 void runIndexedPriorityQueueDemo() {
@@ -1397,6 +1520,16 @@ int main(const int argc, char** argv) {
             }
 
             runAttentionResidualDemo();
+            return 0;
+        }
+
+        if (mode == "--layer-norm") {
+            if (argc != 2) {
+                printUsage(argv[0]);
+                return 1;
+            }
+
+            runLayerNormDemo();
             return 0;
         }
 
