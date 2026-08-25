@@ -26,6 +26,17 @@ inline std::uint64_t parseU64(const char* const text) {
     return static_cast<std::uint64_t>(value);
 }
 
+inline float parseF32(const char* const text) {
+    char* end = nullptr;
+    const float value = std::strtof(text, &end);
+
+    if (end == text || *end != '\0') {
+        throw std::runtime_error(std::string("Expected a floating point value, got: ") + text);
+    }
+
+    return value;
+}
+
 inline std::string describeByte(const unsigned char byte) {
     if (byte == ' ') {
         return "space";

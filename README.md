@@ -80,9 +80,13 @@ To train the tiny byte-level model on the Leipzig corpus and use the resulting
 checkpoint for suggestions:
 
 ```sh
-make train-lm TRAIN_BYTES=1000000 TRAIN_STEPS=2000 CHECKPOINT=build/debug/leipzig1M.params
-make suggestions CHECKPOINT=build/debug/leipzig1M.params SUGGEST_BYTES=1000000 SUGGEST_CANDIDATES=1000 PROMPT="der film war "
+make train-lm BUILD=release TRAIN_BYTES=1000000 TRAIN_STEPS=0 CHECKPOINT=build/release/leipzig1M.params
+make suggestions BUILD=release CHECKPOINT=build/release/leipzig1M.params SUGGEST_BYTES=1000000 SUGGEST_CANDIDATES=1000 PROMPT="der film war "
 ```
+
+`TRAIN_STEPS` counts optimizer updates, not corpus bytes. Set it to `0` to
+train one full pass over all windows in the loaded corpus. Positive values train
+that many randomly sampled windows.
 
 `make suggestions` loads the checkpoint and extracts frequent candidate words
 from the corpus. The explicit toy demo is still available with:

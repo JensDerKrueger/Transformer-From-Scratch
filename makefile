@@ -18,6 +18,7 @@ BENCH_CANDIDATES ?= 1000000
 BENCH_ITERATIONS ?= 1000
 TRAIN_BYTES ?= 20000
 TRAIN_STEPS ?= 20
+TRAIN_LR ?= 0.03
 CHECKPOINT ?= build/debug/tiny_lm.params
 SUGGEST_BYTES ?= $(TRAIN_BYTES)
 SUGGEST_CANDIDATES ?= 200
@@ -208,7 +209,7 @@ tiny-lm:
 
 train-lm:
 	$(call build_example,34_train_byte_language_model)
-	./$(TARGET_PATH) --train-lm "$(CORPUS)" $(TRAIN_BYTES) $(TRAIN_STEPS) "$(CHECKPOINT)"
+	./$(TARGET_PATH) --train-lm "$(CORPUS)" $(TRAIN_BYTES) $(TRAIN_STEPS) "$(CHECKPOINT)" $(TRAIN_LR)
 
 checkpoint:
 	$(call build_example,35_checkpoint)
