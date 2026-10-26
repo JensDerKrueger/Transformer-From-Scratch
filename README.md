@@ -21,6 +21,7 @@ current code covers:
 - trainable parameters, linear-layer backpropagation and a first SGD step
 - trainable embeddings, LayerNorm and Attention backward passes
 - a tiny decoder-only language model with corpus training, checkpoints and terminal suggestions
+- supervised weather answers with a closed word vocabulary and held-out combinations
 
 The reusable implementation lives in `include/tfs`. Each lesson has its own
 small program in `examples`, so later lessons do not change the source shown by
@@ -72,6 +73,9 @@ make tiny-lm
 make train-lm
 make checkpoint
 make suggestions
+make weather-train BUILD=release
+make weather-ask BUILD=release
+make weather-interactive BUILD=release
 make ipq
 make ipq-benchmark
 ```
@@ -97,3 +101,58 @@ from the corpus. The explicit toy demo is still available with:
 
 The corpus file is not part of this repository. By default the makefile expects
 `data/leipzig1M.txt`; see `data/README.md` for a reproducible download recipe.
+
+## A small task with verifiable answers
+
+The general byte-level corpus demo is still too small to promise useful language
+completion. The weather experiment instead trains the same Transformer implementation
+on a deliberately restricted task, without downloading a corpus:
+
+```sh
+make weather-train BUILD=release
+make weather-ask BUILD=release WEATHER_PROMPT="In Berlin gibt es Regen. Was brauche ich? Antwort:"
+make weather-ask BUILD=release WEATHER_PROMPT="In Berlin gibt es Sonne. Was brauche ich? Antwort:"
+make weather-interactive BUILD=release
+```
+
+The observed answers to those two prompts after the default training were
+`Nimm einen Schirm mit.` and `Nimm eine Sonnenbrille mit.`. The weather is
+provided in the prompt: this experiment learns a recommendation, not a forecast
+or current weather information.
+
+The training set has 36 examples, using six cities (Berlin, Hamburg, Bonn,
+Bremen, Kiel, Ulm), four conditions (Regen, Sonne, Schnee, Wolken), and two
+questions (`Was brauche ich?` and `Was soll ich mitnehmen?`). Twelve examples
+with held-out city/condition combinations are used only for evaluation.
+Every individual word is present in the training vocabulary; the test measures
+new combinations of known words, not unrestricted language understanding.
+
+This separate demo uses a deterministic 32-token word/punctuation/EOS vocabulary,
+32 tokens of context, and 7,208 parameters. Only response positions contribute to
+the loss. Training uses teacher forcing; inference generates one token at a time
+from model logits, using greedy selection and a learned EOS token. There is no
+weather lookup or answer selection rule during inference. The condition/answer
+table generates the supervised training data only.
+
+The default 200 epochs perform 7,200 SGD updates. In the verified run, complete
+held-out answers improved from 0/12 before training to 12/12 after training;
+training answers were 36/36. Each exact comparison includes EOS. This small task
+can train in seconds; duration alone does not measure learning.
+
+`WEATHER_EPOCHS` changes the epoch count; each training invocation starts from
+scratch. `WEATHER_CHECKPOINT` defaults to `build/$(BUILD)/weather.params`.
+The weather binary is `build/$(BUILD)/weather_demo`, separate from earlier demos.
+Its configuration and vocabulary are recreated deterministically by the program;
+changing the dataset requires retraining. Weather and byte-model checkpoints
+are incompatible. The interactive mode is line based and expects the demonstrated
+sentence forms, capitalization, and vocabulary. Unknown words produce an explicit
+error. It is not yet an open-domain question-answering system.
+
+To check the response loss mask and backpropagation through the whole model:
+
+```sh
+make response-check BUILD=release
+```
+
+This checks tokenizer round trips, rejection of unknown words, and 80 sampled
+parameter derivatives against finite differences across all parameter tensors.

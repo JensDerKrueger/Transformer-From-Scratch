@@ -25,6 +25,10 @@ SUGGEST_CANDIDATES ?= 200
 empty :=
 space := $(empty) $(empty)
 PROMPT ?= der film war$(space)
+WEATHER_EPOCHS ?= 200
+WEATHER_CHECKPOINT ?= build/$(BUILD)/weather.params
+WEATHER_PROMPT ?= In Berlin gibt es Regen. Was brauche ich? Antwort:
+WEATHER_TARGET := $(OUTDIR)/weather_demo
 
 INCLUDES := -Iinclude -Iexamples
 WARNINGS := -Wall -Wextra -Wpedantic -Wunreachable-code
@@ -55,7 +59,8 @@ endef
 .PHONY: activation feed-forward feed-forward-block decoder-block logits softmax cross-entropy
 .PHONY: parameters linear-backward sgd-step clean mrproper
 .PHONY: trainable-embedding initialization token-windows layernorm-backward attention-backward
-.PHONY: decoder-backward tiny-lm train-lm checkpoint suggestions
+.PHONY: decoder-backward tiny-lm train-lm checkpoint suggestions weather-build weather-train weather-ask weather-interactive
+.PHONY: response-check
 
 all: run
 
@@ -218,6 +223,24 @@ checkpoint:
 suggestions:
 	$(call build_example,36_terminal_suggestions)
 	./$(TARGET_PATH) --suggest "$(CHECKPOINT)" "$(CORPUS)" "$(PROMPT)" $(SUGGEST_BYTES) $(SUGGEST_CANDIDATES)
+
+weather-build:
+	@mkdir -p $(OUTDIR)
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) examples/37_weather_answers.cpp $(LFLAGS) -o $(WEATHER_TARGET)
+
+weather-train: weather-build
+	./$(WEATHER_TARGET) train "$(WEATHER_CHECKPOINT)" $(WEATHER_EPOCHS)
+
+weather-ask: weather-build
+	./$(WEATHER_TARGET) ask "$(WEATHER_CHECKPOINT)" "$(WEATHER_PROMPT)"
+
+weather-interactive: weather-build
+	./$(WEATHER_TARGET) interactive "$(WEATHER_CHECKPOINT)"
+
+response-check:
+	@mkdir -p $(OUTDIR)
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) tests/response_training.cpp $(LFLAGS) -o $(OUTDIR)/response_check
+	./$(OUTDIR)/response_check
 
 clean:
 	rm -rf build/debug build/release
